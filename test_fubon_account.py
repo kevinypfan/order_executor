@@ -11,7 +11,7 @@ from decimal import Decimal
 from datetime import timezone as tz
 
 # 設定測試環境的日誌級別
-logging.basicConfig(level=logging.DEBUG)  # 顯示詳細日誌訊息
+logging.basicConfig(level=logging.INFO)  # 顯示詳細日誌訊息
 
 from finlab.online.enums import OrderCondition, OrderStatus, Action
 from finlab.online.order_executor import OrderExecutor, Position
@@ -27,7 +27,7 @@ class TestFubonAccount(unittest.TestCase):
         try:
             self.fubon_account = FubonAccount()
         except Exception as e:
-            print(f"設定 FubonAccount 時發生錯誤: {e}")
+            logging.info(f"設定 FubonAccount 時發生錯誤: {e}")
             raise
     
     def tearDown(self):
@@ -36,7 +36,7 @@ class TestFubonAccount(unittest.TestCase):
             oe = OrderExecutor(Position({}), self.fubon_account)
             oe.cancel_orders()
         except Exception as e:
-            print(f"清理測試環境時發生錯誤: {e}")
+            logging.info(f"清理測試環境時發生錯誤: {e}")
             # 即使清理失敗，我們仍希望其他測試能繼續
     
     def test_account_initialization(self):
@@ -48,31 +48,31 @@ class TestFubonAccount(unittest.TestCase):
     def test_get_total_balance(self):
         """測試獲取總資產餘額"""
         total_balance = self.fubon_account.get_total_balance()
-        print(f'總資產餘額: {total_balance}')
+        logging.info(f'總資產餘額: {total_balance}')
         self.assertIsInstance(total_balance, (int, float))
     
     def test_get_cash(self):
         """測試獲取可用資金"""
         cash = self.fubon_account.get_cash()
-        print(f'可用資金: {cash}')
+        logging.info(f'可用資金: {cash}')
         self.assertIsInstance(cash, (int, float))
     
     def test_get_settlement(self):
         """測試獲取未交割款項"""
         settlement = self.fubon_account.get_settlement()
-        print(f'未交割款項: {settlement}')
+        logging.info(f'未交割款項: {settlement}')
         self.assertIsInstance(settlement, (int, float))
     
     def test_get_position(self):
         """測試獲取持有部位"""
         position = self.fubon_account.get_position()
-        print(f'持有部位: \n{position}')
+        logging.info(f'持有部位: \n{position}')
         self.assertIsInstance(position, Position)
     
     def test_get_orders(self):
         """測試獲取委託單"""
         orders = self.fubon_account.get_orders()
-        print(f'委託單: {orders}')
+        logging.info(f'委託單: {orders}')
         self.assertIsInstance(orders, dict)
     
     def test_get_stocks(self):
@@ -88,7 +88,7 @@ class TestFubonAccount(unittest.TestCase):
     def test_create_and_cancel_order(self):
         """測試建立和取消委託單"""
         # 選擇一個測試用股票代碼和數量
-        stock_id = '2330'
+        stock_id = '0056'
         quantity = 1  # 1張
         
         # 建立委託單
@@ -96,7 +96,7 @@ class TestFubonAccount(unittest.TestCase):
             action=Action.BUY,
             stock_id=stock_id,
             quantity=quantity,
-            price=960.0  # 使用比市價低的價格以避免實際成交
+            price=32.0  # 使用比市價低的價格以避免實際成交
         )
         
         # 如果成功建立委託單，則取消
@@ -124,15 +124,89 @@ class TestFubonAccount(unittest.TestCase):
             orders = self.fubon_account.get_orders()
             if order_id in orders:
                 self.assertEqual(orders[order_id].status, OrderStatus.CANCEL)
-    
+
+    def test_update_odd_lot_order_price(self):
+        """測試更新委託單"""
+        # 選擇一個測試用股票代碼和數量
+        stock_id = '0056'
+        quantity = 100
+        original_price = 32.0
+        new_price = 32.5
+        
+        # 建立委託單
+        order_id = self.fubon_account.create_order(
+            action=Action.BUY,
+            stock_id=stock_id,
+            quantity=quantity,
+            price=original_price,
+            odd_lot=True
+        )
+        
+        # 如果成功建立委託單，則更新
+        if order_id:
+            # 等待委託單創建完成
+            time.sleep(5)
+            
+            # 更新委託單價格
+            self.fubon_account.update_order(order_id, price=new_price)
+            
+            # 等待更新完成
+            time.sleep(5)
+            
+            # 獲取委託單並檢查價格是否更新
+            orders = self.fubon_account.get_orders()
+            if order_id in orders:
+                self.assertAlmostEqual(float(orders[order_id].price), new_price, places=2)
+            
+            time.sleep(50)
+            # 取消委託單
+            self.fubon_account.cancel_order(order_id)
+
+    def test_update_odd_lot_order_quantity(self):
+        """測試更新委託單"""
+        # 選擇一個測試用股票代碼和數量
+        stock_id = '0056'
+        original_quantity = 100
+        new_quantity = 50
+        price = 32.0
+
+        # 建立委託單
+        order_id = self.fubon_account.create_order(
+            action=Action.BUY,
+            stock_id=stock_id,
+            quantity=original_quantity,
+            price=price,
+            odd_lot=True
+        )
+
+        # 如果成功建立委託單，則更新
+        if order_id:
+            # 等待委託單創建完成
+            time.sleep(5)
+
+            # 更新委託單價格
+            self.fubon_account.update_order(order_id, quantity=new_quantity)
+
+            # 等待更新完成
+            time.sleep(5)
+
+            # 獲取委託單並檢查價格是否更新
+            orders = self.fubon_account.get_orders()
+            if order_id in orders:
+                self.assertAlmostEqual(float(orders[order_id].quantity), new_quantity/1000, places=2)
+
+            time.sleep(5)
+            # 取消委託單
+            self.fubon_account.cancel_order(order_id)
+
     def test_update_order(self):
         """測試更新委託單"""
         # 選擇一個測試用股票代碼和數量
-        stock_id = '2330'
+        stock_id = '0056'
         quantity = 1  # 1張
-        original_price = 500.0
-        new_price = 510.0
-        
+        original_price = 32.0
+        new_price = 32.5
+
         # 建立委託單
         order_id = self.fubon_account.create_order(
             action=Action.BUY,
@@ -140,23 +214,24 @@ class TestFubonAccount(unittest.TestCase):
             quantity=quantity,
             price=original_price
         )
-        
+
         # 如果成功建立委託單，則更新
         if order_id:
             # 等待委託單創建完成
-            time.sleep(2)
-            
+            time.sleep(5)
+
             # 更新委託單價格
             self.fubon_account.update_order(order_id, price=new_price)
-            
+
             # 等待更新完成
-            time.sleep(2)
-            
+            time.sleep(5)
+
             # 獲取委託單並檢查價格是否更新
             orders = self.fubon_account.get_orders()
             if order_id in orders:
                 self.assertAlmostEqual(float(orders[order_id].price), new_price, places=2)
-            
+
+            time.sleep(5)
             # 取消委託單
             self.fubon_account.cancel_order(order_id)
 
@@ -180,8 +255,8 @@ class TestFubonAccount(unittest.TestCase):
     def _test_account(self, odd_lot=False):
         """測試帳戶下單和取消訂單功能"""
         # 選擇測試用股票代碼
-        sid1 = '2330'
-        sid2 = '2317'
+        sid1 = '00940'
+        sid2 = '00878'
 
         # 設定張數或零股數量
         if odd_lot:
@@ -214,7 +289,7 @@ class TestFubonAccount(unittest.TestCase):
 
     def _test_update_price(self, odd_lot=False):
         """測試更新訂單價格功能"""
-        sid1 = '2330'
+        sid1 = '00878'
         if odd_lot:
             q_sid1 = 0.1  # 零股
         else:
@@ -224,22 +299,23 @@ class TestFubonAccount(unittest.TestCase):
         view_orders = oe.create_orders(view_only=True)
         time.sleep(5)
         oe.create_orders()
-        time.sleep(2)
+        time.sleep(10)
         orders = oe.account.get_orders()
-
+        logging.debug(f"orders in _test_update_price: {orders}")
         # 獲取訂單ID
         oids = []
         for oid, o in orders.items():
             if o.status == OrderStatus.NEW:
                 oids.append(oid)
 
+        logging.debug(f"oids: {oids}")
         if not oids:
             self.skipTest("沒有待更新的訂單，跳過測試")
 
-        time.sleep(5)
+        time.sleep(30)
         # 更新價格 (提高5%)
         oe.update_order_price(extra_bid_pct=0.05)
-        time.sleep(3)
+        time.sleep(30)
 
         # 檢查訂單更新後狀態
         orders_new = oe.account.get_orders()
