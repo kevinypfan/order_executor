@@ -197,6 +197,7 @@ class TestMasterlinkAccount(unittest.TestCase):
             # 取消委託單
             self.masterlink_account.cancel_order(order_id)
 
+
     # 以下是新增的集成測試，參考 FugleAccount 測試風格
     def test_masterlink_order(self):
         """測試元富帳戶正常下單"""
@@ -217,8 +218,8 @@ class TestMasterlinkAccount(unittest.TestCase):
     def _test_account(self, odd_lot=False):
         """測試帳戶下單和取消訂單功能"""
         # 選擇測試用股票代碼
-        sid1 = '2330'
-        sid2 = '2317'
+        sid1 = '00940'
+        sid2 = '00878'
 
         # 設定張數或零股數量
         if odd_lot:
@@ -251,7 +252,7 @@ class TestMasterlinkAccount(unittest.TestCase):
 
     def _test_update_price(self, odd_lot=False):
         """測試更新訂單價格功能"""
-        sid1 = '2330'
+        sid1 = '00940'
         if odd_lot:
             q_sid1 = 0.1  # 零股
         else:
@@ -269,14 +270,14 @@ class TestMasterlinkAccount(unittest.TestCase):
         for oid, o in orders.items():
             if o.status == OrderStatus.NEW:
                 oids.append(oid)
-
+        logging.debug(f"oids: {oids}")
         if not oids:
             self.skipTest("沒有待更新的訂單，跳過測試")
 
         time.sleep(5)
         # 更新價格 (提高5%)
         oe.update_order_price(extra_bid_pct=0.05)
-        time.sleep(3)
+        time.sleep(20)
 
         # 檢查訂單更新後狀態
         orders_new = oe.account.get_orders()
